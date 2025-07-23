@@ -1,0 +1,26 @@
+tokens:
+  bot: "BOT_TOKEN_GOES_HERE" #token used to run bot, do NOT share it. If leaked anyone can take control of the bot and cause irreversible damage
+  yt: "YOUTUBE_TOKEN_GOES_HERE" #token used to check for yt uploads, also do NOT share.
+
+behaviour:
+  COMMAND_PREFIX: "!"
+  flags:
+    CAN_FLAG_ADMINS: false #if on admins can get flagged and punished
+    FILTER_AFFECTS_ADMINS: false #if on filter will also prevent admins from sending blacklisted words as well as punish them
+
+youtube:
+  target: "https://www.youtube.com/@Unblynde" #link to yt channel
+  announcements:
+    new_video: "{PING_everyone} Unblynde has posted a new [video]({target_video_link})!\n**# {title}**\n\n`{description}`"
+    new_short: "{PING_everyone} Unblynde has posted a new [short]({target_video_link})!\n**# {title}**\n\n`{description}`"
+    upcoming_premiere: "{PING_everyone} Unblynde has set a [premiere]({target_video_link})!\n**# {title}**\nPremiere on **{premiere_date}**\n\n`{description}`"
+    premiere: "{PING_everyone} Unblynde is premiering [now]({target_video_link})!\n**# {title}**\n\n`{description}`"
+    upcoming_stream: "{PING_everyone} Unblynde has set a [stream]({target_video_link})!\n**# {title}**\non **{premiere_date}**\n\n`{description}`"
+    stream: "{PING_everyone} Unblynde is currently [streaming]({target_video_link})!\n**# {title}**\n\n`{description}`"
+
+  flags:
+    IGNORE_SHORTS: false
+    IGNORE_VIDEOS: false
+    IGNORE_STREAMS: false
+    CHECK_INTERVAL: 60 #check for new uploads every CHECK_INTERVAL s
+    ANNOUNCEMENT_CHANNEL_ID: "INSERT_CHANNEL_ID"
