@@ -1,1 +1,22 @@
- 
+{
+  "bad word": {
+    "event": "mute",
+    "count": 3
+  },
+  "worse word": {
+    "event": "mute",
+    "count": 2
+  },
+  "awful phrase": {
+    "event": "mute",
+    "count": 1
+  },
+  "kick-worthy": {
+    "event": "kick",
+    "count": 3
+  },
+  "ban-worthy": {
+    "event": "ban",
+    "count": 2
+  }
+}

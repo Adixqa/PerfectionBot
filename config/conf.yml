@@ -1,26 +1,31 @@
 tokens:
-  bot: "YOUR_BOT_TOKEN_GOES_HERE" #token used to run bot, do NOT share it. If leaked anyone can take control of the bot and cause irreversible damage
-  yt: "YOUR_YT_TOKEN_GOES_HERE" #token used to check for yt uploads, also do NOT share.
+  bot: "YOUR_BOT_TOKEN_HERE" #token used to run bot, do NOT share it. If leaked anyone can take control of the bot and cause irreversible damage
+  yt: "YOUR_YT_TOKEN_HERE" #token used to check for yt uploads, also do NOT share.
 
 behaviour:
   COMMAND_PREFIX: "!"
+  filter:
+    DETECTION_THRESHOLD: 65 #the higher, the less will filter detect/flag. Reccomended between 50 to 70
   flags:
     CAN_FLAG_ADMINS: false #if on admins can get flagged and punished
     FILTER_AFFECTS_ADMINS: false #if on filter will also prevent admins from sending blacklisted words as well as punish them
+    MUTE_TIME: 900 #mute after filter detection in s
+    WARN_DM: "You have been warned for saying: `{word}`.\nIf you think you have been mistakenly flagged please contact administration."
+    FLAG_LIMIT: 10 #when user reaches that number of flags they will get instantly banned
 
 youtube:
-  target: "https://www.youtube.com/@Unblynde" #link to yt channel
+  target: "https://www.youtube.com/channel/ID" #link to yt channel
   announcements:
-    new_video: "{PING_everyone} Unblynde has posted a new [video]({target_video_link})!\n**# {title}**\n`{description}`"
-    new_short: "{PING_everyone} Unblynde has posted a new [short]({target_video_link})!\n**# {title}**\n`{description}`"
-    upcoming_premiere: "{PING_everyone} Unblynde has set a [premiere]({target_video_link})!\n**# {title}**\nPremiere on **{premiere_date}**\n\n`{description}`"
-    premiere: "{PING_everyone} Unblynde is premiering [now]({target_video_link})!\n**# {title}**\n\n`{description}`"
-    upcoming_stream: "{PING_everyone} Unblynde has set a [stream]({target_video_link})!\n**# {title}**\non **{premiere_date}**\n\n`{description}`"
-    stream: "{PING_everyone} Unblynde is currently [streaming]({target_video_link})!\n**# {title}**\n`{description}`"
+    new_video: "{PING_everyone} ... has posted a new [video]({target_video_link})!\n**# {title}**\n`{description}`"
+    new_short: "{PING_everyone} ... has posted a new [short]({target_video_link})!\n**# {title}**\n`{description}`"
+    upcoming_premiere: "{PING_everyone} ... has set a [premiere]({target_video_link})!\n**# {title}**\nPremiere on **{premiere_date}**\n\n`{description}`"
+    premiere: "{PING_everyone} ... is premiering [now]({target_video_link})!\n**# {title}**\n\n`{description}`"
+    upcoming_stream: "{PING_everyone} ... has set a [stream]({target_video_link})!\n**# {title}**\non **{premiere_date}**\n\n`{description}`"
+    stream: "{PING_everyone} ... is currently [streaming]({target_video_link})!\n**# {title}**\n`{description}`"
 
   flags:
     IGNORE_SHORTS: false
     IGNORE_VIDEOS: false
     IGNORE_STREAMS: false
-    CHECK_INTERVAL: 60 #check for new uploads every CHECK_INTERVAL s
-    ANNOUNCEMENT_CHANNEL_ID: "1397648099471655113" #channel where bot will announce uploads
+    CHECK_INTERVAL: 30 #check for new uploads every CHECK_INTERVAL s
+    ANNOUNCEMENT_CHANNEL_ID: "" #channel where bot will announce uploads

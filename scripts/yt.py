@@ -10,14 +10,14 @@ def to_bool(value):
         return value.lower() == 'true'
     return False
 
-API_KEY               = get_value("tokens", "yt")
-CHANNEL_URL           = get_value("youtube", "target")
-CHECK_INTERVAL        = int(get_value("youtube", "flags", "CHECK_INTERVAL"))
-IGNORE_SHORTS         = to_bool(get_value("youtube", "flags", "IGNORE_SHORTS"))
-IGNORE_VIDEOS         = to_bool(get_value("youtube", "flags", "IGNORE_VIDEOS"))
-IGNORE_STREAMS        = to_bool(get_value("youtube", "flags", "IGNORE_STREAMS"))
-ANNOUNCEMENTS         = get_value("youtube", "announcements")
-ANNOUNCEMENT_CHANNEL_ID = int(get_value("youtube", "flags", "ANNOUNCEMENT_CHANNEL_ID"))
+API_KEY                  = get_value("tokens", "yt")
+CHANNEL_URL              = get_value("youtube", "target")
+CHECK_INTERVAL           = int(get_value("youtube", "flags", "CHECK_INTERVAL"))
+IGNORE_SHORTS            = to_bool(get_value("youtube", "flags", "IGNORE_SHORTS"))
+IGNORE_VIDEOS            = to_bool(get_value("youtube", "flags", "IGNORE_VIDEOS"))
+IGNORE_STREAMS           = to_bool(get_value("youtube", "flags", "IGNORE_STREAMS"))
+ANNOUNCEMENTS            = get_value("youtube", "announcements")
+ANNOUNCEMENT_CHANNEL_ID  = int(get_value("youtube", "flags", "ANNOUNCEMENT_CHANNEL_ID"))
 
 youtube = build('youtube', 'v3', developerKey=API_KEY)
 
@@ -68,7 +68,6 @@ async def monitor_channel(bot):
 
         await asyncio.sleep(CHECK_INTERVAL)
 
-
 def _summarize(v):
     s    = v['snippet']
     stat = v.get('status', {})
@@ -89,24 +88,35 @@ def _summarize(v):
     bc = s.get('liveBroadcastContent','none')
 
     if bc == 'none':
+        # Parse ISO 8601 duration string (PT#H#M#S)
         m = re.match(r'PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?', cd.get('duration',''))
         hrs = int(m.group(1) or 0)
         mins= int(m.group(2) or 0)
         secs= int(m.group(3) or 0)
-        tot = hrs*3600+mins*60+secs
-        if tot <= 180:
+        tot = hrs * 3600 + mins * 60 + secs
+
+        # Check aspect ratio from thumbnail
+        thumbs = s.get('thumbnails', {})
+        thumb = thumbs.get('maxres') or thumbs.get('standard') or thumbs.get('high') or thumbs.get('medium') or thumbs.get('default')
+        is_vertical = False
+        if thumb:
+            width = thumb.get('width', 0)
+            height = thumb.get('height', 0)
+            is_vertical = height > width
+
+        if tot <= 180 and is_vertical:
             return None if IGNORE_SHORTS else F(ANNOUNCEMENTS['new_short'])
         else:
             return None if IGNORE_VIDEOS else F(ANNOUNCEMENTS['new_video'])
 
     if bc == 'upcoming':
         if 'scheduledStartTime' in live:
-            if stat.get('uploadStatus')=='processed':
+            if stat.get('uploadStatus') == 'processed':
                 return F(ANNOUNCEMENTS['upcoming_premiere'])
             return None if IGNORE_STREAMS else F(ANNOUNCEMENTS['upcoming_stream'])
 
     if bc == 'live' and not IGNORE_STREAMS:
-        if stat.get('uploadStatus')=='processed':
+        if stat.get('uploadStatus') == 'processed':
             return F(ANNOUNCEMENTS['premiere'])
         return F(ANNOUNCEMENTS['stream'])
 
