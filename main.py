@@ -97,7 +97,8 @@ async def on_message(message: discord.Message):
     # Admin immunity config
     if any(r.permissions.administrator for r in message.author.roles) and not get_value("behaviour", "flags", "FILTER_AFFECTS_ADMINS"):
         return await bot.process_commands(message)
-
+    
+    context = message
     hit = check_bad(message.content)
     if not hit:
         return await bot.process_commands(message)
@@ -115,24 +116,24 @@ async def on_message(message: discord.Message):
     user_mem["flags_total"] += 1
 
     await _save_flags(message.guild)
-    await log_to_channel(message.guild, f"[WARN] {message.author.mention} for `{word}`", discord.Color.yellow())
+    await log_to_channel(message.guild, f"[WARN] {message.author.mention} for `{word}`\n\nContext: `{context}`", discord.Color.yellow(), "warn")
 
     try:
         tmpl = get_value("behaviour", "flags", "WARN_DM")
         await message.author.send(tmpl.format(word=word))
     except Exception as e:
-        await log_to_channel(message.guild, f"❌ Warn DM failed: {e}", discord.Color.red())
+        await log_to_channel(message.guild, f"❌ Warn DM failed: {e}", discord.Color.red(), "fail")
 
     if word_counts[word] >= thresh:
-        await log_to_channel(message.guild, f"[{evt.upper()}] {message.author.mention} for `{word}`", discord.Color.orange())
+        #await log_to_channel(message.guild, f"[{evt.upper()}] {message.author.mention} for `{word}`", discord.Color.orange())
         if evt == "mute":
             t = get_value("behaviour", "flags", "MUTE_TIME")
             until = datetime.now(timezone.utc) + timedelta(seconds=t)
             try:
                 await message.author.timeout(until, reason="Blacklisted content")
-                await log_to_channel(message.guild, f"🔇 Muted {message.author.mention} ({t}s)", discord.Color.orange())
+                await log_to_channel(message.guild, f"🔇 Muted {message.author.mention} ({t}s)", discord.Color.orange(), "mute")
             except Exception as e:
-                await log_to_channel(message.guild, f"❌ Mute failed: {e}", discord.Color.red())
+                await log_to_channel(message.guild, f"❌ Mute failed: {e}", discord.Color.red(), "fail")
         else:
             await initiate_lockdown(message.guild, message.author, word, evt)
 
@@ -144,7 +145,7 @@ async def on_message(message: discord.Message):
                 reason=f"Reached {limit} flags",
                 delete_message_days=0
             )
-            await log_to_channel(message.guild, f"⛔ Auto-banned {message.author.mention} for reaching flag limit", discord.Color.red())
+            await log_to_channel(message.guild, f"⛔ Auto-banned {message.author.mention} for reaching flag limit", discord.Color.red(), "ban")
             flag_memory[gid].pop(uid, None)
             chan = discord.utils.get(
                 message.guild.text_channels,
@@ -153,7 +154,7 @@ async def on_message(message: discord.Message):
             if chan:
                 await chan.delete(reason="User auto-banned")
         except Exception as e:
-            await log_to_channel(message.guild, f"❌ Auto-ban failed: {e}", discord.Color.red())
+            await log_to_channel(message.guild, f"❌ Auto-ban failed: {e}", discord.Color.red(), "fail")
 
     await _save_flags(message.guild)
     await bot.process_commands(message)
@@ -175,31 +176,31 @@ async def modflags(ctx: commands.Context, member: discord.Member, amount: int, k
         before = um["flags_total"]
         um["flags_total"] = max(before+amount,0)
         await ctx.send(f"✅ {member.mention} total flags: {before} → {um['flags_total']}")
-        await log_to_channel(ctx.guild, f"🛠 Admin adjusted total flags for {member.mention}: {before} → {um['flags_total']}", discord.Color.blurple())
+        await log_to_channel(ctx.guild, f"🛠 Admin adjusted total flags for {member.mention}: {before} → {um['flags_total']},", discord.Color.blurple(), "info")
     else:
         before = um["words"].get(keyword,0)
         um["words"][keyword] = max(before+amount,0)
-        await ctx.send(f"✅ {member.mention} flags for `{keyword}`: {before} → {um['words'][keyword]}")
-        await log_to_channel(ctx.guild, f"🛠 Admin adjusted `{keyword}` flags for {member.mention}: {before} → {um['words'][keyword]}", discord.Color.blurple())
+        await ctx.send(f"✅ {member.mention} flags for `{keyword}`: {before} → {um['words'][keyword]}", discord.Color.blurple(), "info")
+        await log_to_channel(ctx.guild, f"🛠 Admin adjusted `{keyword}` flags for {member.mention}: {before} → {um['words'][keyword]}", discord.Color.blurple(), "info")
     await _save_flags(ctx.guild)
 
 @bot.command(name="confirm")
-@commands.has_permissions(administrator=True)
+@commands.has_permissions(ban_members=True)
 async def confirm(ctx: commands.Context):
     await handle_confirm(ctx, flag_memory, _save_flags)
 
 @bot.command(name="revoke")
-@commands.has_permissions(administrator=True)
+@commands.has_permissions(ban_members=True)
 async def revoke(ctx: commands.Context):
     await handle_revoke(ctx, flag_memory, _save_flags)
 
 @bot.command(name="clear")
-@commands.has_permissions(administrator=True)
+@commands.has_permissions(manage_messages=True)
 async def clear(ctx: commands.Context, amount: int):
     if not 1 <= amount <= 100:
         return await ctx.reply("Choose between 1 and 100.")
     await ctx.channel.purge(limit=amount+1)
-    await log_to_channel(ctx.guild, f"🛠 Cleared {amount} messages in {ctx.channel}", discord.Color.blurple())
+    await log_to_channel(ctx.guild, f"🛠 Cleared {amount} messages in {ctx.channel}", discord.Color.blurple(), "clear")
 
 @bot.command(name="ping")
 @commands.has_permissions(administrator=True)
