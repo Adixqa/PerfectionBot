@@ -258,13 +258,24 @@ async def flags(ctx: commands.Context, user: str = None):
 
     await ctx.send(embed=embed)
 
-
-
 @bot.command(name="modflags")
 @commands.has_permissions(administrator=True)
-async def modflags(ctx: commands.Context, member: discord.Member, amount: int, keyword: str=None):
+async def modflags(ctx: commands.Context, user: str, amount: int, keyword: str = None):
+    member = None
+    if user.startswith("<@") and user.endswith(">"):
+        user = user.strip("<@!>")
+    try:
+        uid = int(user)
+        member = ctx.guild.get_member(uid)
+    except ValueError:
+        return await ctx.send("❌ Invalid user ID or mention format.")
+
+    if not member:
+        return await ctx.send("❌ User not found in this server.")
+
     gm, uid = ctx.guild.id, member.id
     um = flag_memory.setdefault(gm, {}).setdefault(uid, {"flags_total": 0, "words": {}})
+
     if keyword is None:
         before = um["flags_total"]
         um["flags_total"] = max(before + amount, 0)
@@ -311,7 +322,6 @@ async def clear(ctx: commands.Context, amount: int):
     )
 
 @bot.command(name="ping")
-@commands.has_permissions(administrator=True)
 async def ping(ctx: commands.Context):
     await ctx.reply("Ping!")
 
