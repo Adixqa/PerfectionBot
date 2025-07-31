@@ -1,5 +1,9 @@
+#yt
+
 import asyncio
 import re
+import discord
+
 from googleapiclient.discovery import build
 from PerfectionBot.config.yamlHandler import get_value
 
@@ -57,7 +61,34 @@ async def monitor_channel(bot):
                     if ann:
                         ch = bot.get_channel(ANNOUNCEMENT_CHANNEL_ID)
                         if ch:
-                            await ch.send(ann)
+                            try:
+                                pinned = await ch.pins()
+                                new_link = f"https://www.youtube.com/watch?v={vid}"
+                                already_pinned = any(new_link in msg.content for msg in pinned)
+
+                                if not already_pinned:
+                                    sent = await ch.send(ann)
+
+                                    for msg in pinned:
+                                        try:
+                                            await msg.unpin()
+                                        except Exception as e:
+                                            print("Failed to unpin message:", e)
+
+                                    try:
+                                        await sent.pin()
+
+                                        async for msg in ch.history(limit=5):
+                                            if msg.type == discord.MessageType.pins_add:
+                                                if msg.author == bot.user:
+                                                    await msg.delete()
+                                                break
+                                    except Exception as e:
+                                        print("Failed to pin new message or remove pin notice:", e)
+                                else:
+                                    print("Video already announced via pinned message.")
+                            except Exception as e:
+                                print("Error handling pinned messages:", e)
                         else:
                             print(f"Channel {ANNOUNCEMENT_CHANNEL_ID} not found.")
                     last_video_id = vid
@@ -88,14 +119,12 @@ def _summarize(v):
     bc = s.get('liveBroadcastContent','none')
 
     if bc == 'none':
-        # Parse ISO 8601 duration string (PT#H#M#S)
         m = re.match(r'PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?', cd.get('duration',''))
         hrs = int(m.group(1) or 0)
         mins= int(m.group(2) or 0)
         secs= int(m.group(3) or 0)
         tot = hrs * 3600 + mins * 60 + secs
 
-        # Check aspect ratio from thumbnail
         thumbs = s.get('thumbnails', {})
         thumb = thumbs.get('maxres') or thumbs.get('standard') or thumbs.get('high') or thumbs.get('medium') or thumbs.get('default')
         is_vertical = False

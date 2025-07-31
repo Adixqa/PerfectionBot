@@ -1,3 +1,5 @@
+#log
+
 import discord
 from PerfectionBot.config.yamlHandler import get_value
 
@@ -19,7 +21,7 @@ async def log_to_channel(
     event_type: str = "info"
 ):
     try:
-        log_channel_id = get_value("behaviour", "LOG_ID")
+        log_channel_id = get_value("LOG_ID")
         channel = guild.get_channel(int(log_channel_id))
         if not channel or not isinstance(channel, discord.TextChannel):
             return

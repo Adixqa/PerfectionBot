@@ -1,22 +1,20 @@
+#main
+
 import discord
 from discord.ext import commands
 import json
 from datetime import datetime, timedelta, timezone
 
-# Replace these imports with your actual implementations
 from PerfectionBot.config.yamlHandler import get_value
 from PerfectionBot.scripts.filter import check_bad
-from PerfectionBot.scripts import yt
-from PerfectionBot.scripts.lockdown import (
-    initiate_lockdown,
-    handle_confirm,
-    handle_revoke
-)
+from PerfectionBot.scripts import yt, verify
+from PerfectionBot.scripts.lockdown import initiate_lockdown, handle_confirm, handle_revoke
 from PerfectionBot.scripts.log import log_to_channel
 
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
+intents.reactions = True
 
 bot = commands.Bot(
     command_prefix=get_value("behaviour", "COMMAND_PREFIX"),
@@ -25,27 +23,28 @@ bot = commands.Bot(
 
 flag_memory: dict[int, dict[int, dict]] = {}
 _flag_msgs: dict[int, discord.Message] = {}
+verify_msg_ids: dict[int, int] = {}
 
 async def _load_flags(guild: discord.Guild):
-    ch = discord.utils.get(guild.text_channels, name="bot-mem")
-    if not ch:
+    mem = discord.utils.get(guild.text_channels, name="bot-mem")
+    if not mem:
         return {}
-    pinned = await ch.pins()
+    pinned = await mem.pins()
     if not pinned:
-        msg = await ch.send("{}")
+        msg = await mem.send("{}")
         await msg.pin()
         return {}
     data = json.loads(pinned[0].content)
     return {int(u): v for u, v in data.get(str(guild.id), {}).items()}
 
 async def _save_flags(guild: discord.Guild):
-    ch = discord.utils.get(guild.text_channels, name="bot-mem")
-    if not ch:
+    mem = discord.utils.get(guild.text_channels, name="bot-mem")
+    if not mem:
         return
     msg = _flag_msgs.get(guild.id)
     if not msg:
-        pinned = await ch.pins()
-        msg = pinned[0] if pinned else await ch.send("{}")
+        pinned = await mem.pins()
+        msg = pinned[0] if pinned else await mem.send("{}")
         await msg.pin()
         _flag_msgs[guild.id] = msg
 
@@ -65,16 +64,6 @@ async def _ensure_channels(guild: discord.Guild):
                 guild.me: discord.PermissionOverwrite(read_messages=True)
             }
         )
-    logs = discord.utils.get(guild.text_channels, name="bot-logs")
-    if not logs:
-        await guild.create_text_channel(
-            "bot-logs",
-            overwrites={
-                guild.default_role: discord.PermissionOverwrite(read_messages=False),
-                guild.me: discord.PermissionOverwrite(read_messages=True)
-            }
-        )
-
     flag_memory[guild.id] = await _load_flags(guild)
     pinned = await mem.pins()
     if pinned:
@@ -83,40 +72,83 @@ async def _ensure_channels(guild: discord.Guild):
 @bot.event
 async def on_ready():
     print(f"Bot online: {bot.user} (ID: {bot.user.id})")
-    for g in bot.guilds:
-        await _ensure_channels(g)
+    for guild in bot.guilds:
+        await _ensure_channels(guild)
+
+        try:
+            verify_channel_id = int(get_value("VERIFY_ID"))
+            ch = guild.get_channel(verify_channel_id)
+            if ch:
+                verify_msg = await verify.GetVerifyMsg(ch)
+                verify_msg_ids[guild.id] = verify_msg.id
+            else:
+                print(f"[verify] channel {verify_channel_id} not found in guild {guild.id}")
+        except Exception as e:
+            await log_to_channel(guild, f"❌ Verify message fetch failed: {e}", discord.Color.red(), "fail")
+
     bot.loop.create_task(yt.monitor_channel(bot))
+
+@bot.event
+async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
+    if payload.user_id == bot.user.id:
+        return
+
+    guild = bot.get_guild(payload.guild_id)
+    if not guild:
+        return
+
+    if verify_msg_ids.get(payload.guild_id) != payload.message_id:
+        return
+
+    if str(payload.emoji) != "✅":
+        return
+
+    member = guild.get_member(payload.user_id)
+    if not member:
+        return
+
+    await verify.add_role(guild, member)
+    await log_to_channel(
+        guild,
+        f"✅ Verified {member.mention}",
+        discord.Color.green(),
+        "verify"
+    )
 
 @bot.event
 async def on_message(message: discord.Message):
     if message.author.bot or not message.guild:
         return
 
-    gid, uid = message.guild.id, message.author.id
+    guild_id, user_id = message.guild.id, message.author.id
 
-    # Admin immunity config
-    if any(r.permissions.administrator for r in message.author.roles) and not get_value("behaviour", "flags", "FILTER_AFFECTS_ADMINS"):
+    if any(r.permissions.administrator for r in message.author.roles) \
+       and not get_value("behaviour", "flags", "FILTER_AFFECTS_ADMINS"):
         return await bot.process_commands(message)
-    
-    context = message
+
     hit = check_bad(message.content)
     if not hit:
         return await bot.process_commands(message)
 
     try:
         await message.delete()
-    except Exception:
+    except:
         pass
 
     word, evt, thresh = hit["word"], hit["event"], hit["count"]
-
-    user_mem = flag_memory.setdefault(gid, {}).setdefault(uid, {"flags_total":0,"words":{}})
+    user_mem = flag_memory.setdefault(guild_id, {}) \
+                          .setdefault(user_id, {"flags_total": 0, "words": {}})
     word_counts = user_mem["words"]
     word_counts[word] = word_counts.get(word, 0) + 1
     user_mem["flags_total"] += 1
 
     await _save_flags(message.guild)
-    await log_to_channel(message.guild, f"[WARN] {message.author.mention} for `{word}`\n\nContext: `{context}`", discord.Color.yellow(), "warn")
+    await log_to_channel(
+        message.guild,
+        f"[WARN] {message.author.mention} for `{word}`\n\nContext: `{message.content}`",
+        discord.Color.yellow(),
+        "warn"
+    )
 
     try:
         tmpl = get_value("behaviour", "flags", "WARN_DM")
@@ -125,19 +157,23 @@ async def on_message(message: discord.Message):
         await log_to_channel(message.guild, f"❌ Warn DM failed: {e}", discord.Color.red(), "fail")
 
     if word_counts[word] >= thresh:
-        #await log_to_channel(message.guild, f"[{evt.upper()}] {message.author.mention} for `{word}`", discord.Color.orange())
         if evt == "mute":
-            t = get_value("behaviour", "flags", "MUTE_TIME")
+            t = int(get_value("behaviour", "flags", "MUTE_TIME"))
             until = datetime.now(timezone.utc) + timedelta(seconds=t)
             try:
                 await message.author.timeout(until, reason="Blacklisted content")
-                await log_to_channel(message.guild, f"🔇 Muted {message.author.mention} ({t}s)", discord.Color.orange(), "mute")
+                await log_to_channel(
+                    message.guild,
+                    f"🔇 Muted {message.author.mention} ({t}s)",
+                    discord.Color.orange(),
+                    "mute"
+                )
             except Exception as e:
                 await log_to_channel(message.guild, f"❌ Mute failed: {e}", discord.Color.red(), "fail")
         else:
             await initiate_lockdown(message.guild, message.author, word, evt)
 
-    limit = get_value("behaviour", "flags", "FLAG_LIMIT")
+    limit = int(get_value("behaviour", "flags", "FLAG_LIMIT"))
     if user_mem["flags_total"] >= limit:
         try:
             await message.guild.ban(
@@ -145,11 +181,16 @@ async def on_message(message: discord.Message):
                 reason=f"Reached {limit} flags",
                 delete_message_days=0
             )
-            await log_to_channel(message.guild, f"⛔ Auto-banned {message.author.mention} for reaching flag limit", discord.Color.red(), "ban")
-            flag_memory[gid].pop(uid, None)
+            await log_to_channel(
+                message.guild,
+                f"⛔ Auto-banned {message.author.mention} for reaching flag limit",
+                discord.Color.red(),
+                "ban"
+            )
+            flag_memory[guild_id].pop(user_id, None)
             chan = discord.utils.get(
                 message.guild.text_channels,
-                name=f"lockdown-{uid}"
+                name=f"lockdown-{user_id}"
             )
             if chan:
                 await chan.delete(reason="User auto-banned")
@@ -159,29 +200,91 @@ async def on_message(message: discord.Message):
     await _save_flags(message.guild)
     await bot.process_commands(message)
 
-@bot.command(name="flagged")
-@commands.has_permissions(administrator=True)
-async def flagged(ctx: commands.Context):
-    mem = flag_memory.get(ctx.guild.id, {})
-    lines = [f"{(ctx.guild.get_member(u) or f'<@{u}>')}: total flags={c['flags_total']}" 
-             for u,c in mem.items() if c.get("flags_total",0)]
-    await ctx.send("**Flagged members:**\n" + ("\n".join(lines) or "None"))
+@bot.command(name="flags")
+@commands.has_permissions(ban_members=True)
+async def flags(ctx: commands.Context, user: str = None):
+    gm = ctx.guild.id
+
+    if user is None or user.lower() == "all":
+        mem = flag_memory.get(gm, {})
+        flagged = [(uid, data) for uid, data in mem.items() if data.get("flags_total", 0)]
+
+        embed = discord.Embed(
+            title="Flagged Members",
+            color=discord.Color.orange() if flagged else discord.Color.green()
+        )
+
+        if flagged:
+            for uid, data in flagged:
+                member = ctx.guild.get_member(uid)
+                embed.add_field(
+                    name=str(member) if member else f"<@{uid}>",
+                    value=f"Total Flags: {data.get('flags_total', 0)}",
+                    inline=False
+                )
+        else:
+            embed.description = "None"
+
+        return await ctx.send(embed=embed)
+
+    try :
+        if user.startswith("<@") and user.endswith(">"):
+            user = user.strip("<@!>")
+
+        uid = int(user)
+    except ValueError:
+        return await ctx.send("❌ Invalid user format. Use a mention or numeric ID.")
+
+    user_data = flag_memory.get(gm, {}).get(uid)
+    member = ctx.guild.get_member(uid)
+    member_name = str(member) if member else f"<@{uid}>"
+
+    if not user_data:
+        embed = discord.Embed(
+            title=f"Flags for {member_name}",
+            description="No flags found.",
+            color=discord.Color.green()
+        )
+        return await ctx.send(embed=embed)
+
+    embed = discord.Embed(
+        title=f"Flags for {member_name}",
+        color=discord.Color.orange()
+    )
+    embed.add_field(name="Total Flags", value=str(user_data.get("flags_total", 0)), inline=False)
+
+    for word, count in user_data.get("words", {}).items():
+        embed.add_field(name=word, value=str(count), inline=True)
+
+    await ctx.send(embed=embed)
+
+
 
 @bot.command(name="modflags")
 @commands.has_permissions(administrator=True)
 async def modflags(ctx: commands.Context, member: discord.Member, amount: int, keyword: str=None):
     gm, uid = ctx.guild.id, member.id
-    um = flag_memory.setdefault(gm, {}).setdefault(uid, {"flags_total":0,"words":{}})
+    um = flag_memory.setdefault(gm, {}).setdefault(uid, {"flags_total": 0, "words": {}})
     if keyword is None:
         before = um["flags_total"]
-        um["flags_total"] = max(before+amount,0)
+        um["flags_total"] = max(before + amount, 0)
         await ctx.send(f"✅ {member.mention} total flags: {before} → {um['flags_total']}")
-        await log_to_channel(ctx.guild, f"🛠 Admin adjusted total flags for {member.mention}: {before} → {um['flags_total']},", discord.Color.blurple(), "info")
+        await log_to_channel(
+            ctx.guild,
+            f"🛠 Admin adjusted total flags for {member.mention}: {before} → {um['flags_total']}",
+            discord.Color.blurple(),
+            "info"
+        )
     else:
-        before = um["words"].get(keyword,0)
-        um["words"][keyword] = max(before+amount,0)
-        await ctx.send(f"✅ {member.mention} flags for `{keyword}`: {before} → {um['words'][keyword]}", discord.Color.blurple(), "info")
-        await log_to_channel(ctx.guild, f"🛠 Admin adjusted `{keyword}` flags for {member.mention}: {before} → {um['words'][keyword]}", discord.Color.blurple(), "info")
+        before = um["words"].get(keyword, 0)
+        um["words"][keyword] = max(before + amount, 0)
+        await ctx.send(f"✅ {member.mention} flags for `{keyword}`: {before} → {um['words'][keyword]}")
+        await log_to_channel(
+            ctx.guild,
+            f"🛠 Admin adjusted `{keyword}` flags for {member.mention}: {before} → {um['words'][keyword]}",
+            discord.Color.blurple(),
+            "info"
+        )
     await _save_flags(ctx.guild)
 
 @bot.command(name="confirm")
@@ -199,13 +302,24 @@ async def revoke(ctx: commands.Context):
 async def clear(ctx: commands.Context, amount: int):
     if not 1 <= amount <= 100:
         return await ctx.reply("Choose between 1 and 100.")
-    await ctx.channel.purge(limit=amount+1)
-    await log_to_channel(ctx.guild, f"🛠 Cleared {amount} messages in {ctx.channel}", discord.Color.blurple(), "clear")
+    await ctx.channel.purge(limit=amount + 1)
+    await log_to_channel(
+        ctx.guild,
+        f"🛠 {ctx.author.mention} cleared {amount} messages in {ctx.channel.mention}",
+        discord.Color.blurple(),
+        "clear"
+    )
 
 @bot.command(name="ping")
 @commands.has_permissions(administrator=True)
 async def ping(ctx: commands.Context):
     await ctx.reply("Ping!")
+
+@bot.command(name="resetver")
+@commands.has_permissions(administrator=True)
+async def resetver(ctx: commands.Context):
+    result = await verify.ResetVerification(ctx.guild, verify_msg_ids)
+    await ctx.send(result)
 
 if __name__ == "__main__":
     bot.run(get_value("tokens", "bot"))
