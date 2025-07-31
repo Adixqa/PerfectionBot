@@ -259,7 +259,7 @@ async def flags(ctx: commands.Context, user: str = None):
     await ctx.send(embed=embed)
 
 @bot.command(name="modflags")
-@commands.has_permissions(administrator=True)
+@commands.has_permissions(ban_members=True)
 async def modflags(ctx: commands.Context, user: str, amount: int, keyword: str = None):
     member = None
     if user.startswith("<@") and user.endswith(">"):
