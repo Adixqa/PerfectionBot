@@ -1,4 +1,5 @@
-# scripts/lockdown.py
+#lockdown.py
+
 import asyncio
 import discord
 from discord.ext import commands
@@ -6,7 +7,6 @@ from collections import defaultdict
 
 from PerfectionBot.config.yamlHandler import get_value
 
-# Tracks pending lockdowns per guild: channel_id -> {user_id, word, action}
 _pending_lockdowns: dict[int, dict[int, dict]] = defaultdict(dict)
 
 
@@ -64,7 +64,6 @@ async def handle_confirm(
     action = pend["action"]
     member = ctx.guild.get_member(user_id)
 
-    # Perform action
     try:
         if action == "kick":
             await ctx.guild.kick(member or user_id, reason="Lockdown confirmed")

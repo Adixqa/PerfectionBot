@@ -1,26 +1,29 @@
+LOG_ID: "" #Log stuff to that channel
+VERIFY_ID: "1399006188418633788" #Verification channel
+VERIFY_CHNL_MESSAGE: "By reacting with ✅ you agree that you have read and understand the rules.\nBreaking these rules will result in punishments or even permament bans."
+
 tokens:
-  bot: "YOUR_BOT_TOKEN_HERE" #token used to run bot, do NOT share it. If leaked anyone can take control of the bot and cause irreversible damage
-  yt: "YOUR_YT_TOKEN_HERE" #token used to check for yt uploads, also do NOT share.
+  bot: "YOUR_BOT_TOKEN_HERE" #Token used to run bot, do NOT share it. If leaked anyone can take control of the bot and cause irreversible damage
+  yt: "YOUR_YT_TOKEN_HERE" #Token used to check for yt uploads, also do NOT share.
 
 behaviour:
-  COMMAND_PREFIX: "!"
-  LOG_ID: "" #Log stuff here
+  COMMAND_PREFIX: "!" #Here what you set will trigger the bot to check for command (for example !clear)
   filter:
-    DETECTION_THRESHOLD: 75 #the higher, the less will filter detect/flag. Reccomended between 65 to 85
+    DETECTION_THRESHOLD: 75 #The higher, the less will filter detect/flag. Reccomended between 70 to 85
   flags:
-    CAN_FLAG_ADMINS: false #if on admins can get flagged and punished
-    FILTER_AFFECTS_ADMINS: false #if on filter will also prevent admins from sending blacklisted words as well as punish them
-    MUTE_TIME: 900 #mute after filter detection in s
+    CAN_FLAG_ADMINS: false #If on admins can get flagged and punished
+    FILTER_AFFECTS_ADMINS: false #If on filter will also prevent admins from sending blacklisted words as well as punish them
+    MUTE_TIME: 900 #Mute after filter detection in s
     WARN_DM: "You have been warned for saying: `{word}`.\nIf you think you have been mistakenly flagged please contact administration."
-    FLAG_LIMIT: 10 #when user reaches that number of flags they will get instantly banned
+    FLAG_LIMIT: 10 #When user reaches that number of flags they will get instantly banned
 
 roles:
-  unverified_ID: "" #ID for unverified role
+  verified_ID: "" #ID for verified role
   lockdown_ID: "" #ID for lockdown role
   mod_ID: "" #ID for mod role
 
 youtube:
-  target: "https://www.youtube.com/channel/CHANNEL_ID" #link to yt channel
+  target: "https://www.youtube.com/channel/CHANNEL_ID_HERE" #Link to yt channel
   announcements:
     new_video: "{PING_everyone} ... has posted a new [video]({target_video_link})!\n**# {title}**\n`{description}`"
     new_short: "{PING_everyone} ... has posted a new [short]({target_video_link})!\n**# {title}**\n`{description}`"
@@ -33,8 +36,8 @@ youtube:
     IGNORE_SHORTS: false
     IGNORE_VIDEOS: false
     IGNORE_STREAMS: false
-    CHECK_INTERVAL: 30 #check for new uploads every CHECK_INTERVAL s
-    ANNOUNCEMENT_CHANNEL_ID: "" #channel where bot will announce uploads
+    CHECK_INTERVAL: 30 #Check for new uploads every CHECK_INTERVAL s
+    ANNOUNCEMENT_CHANNEL_ID: "" #Channel where bot will announce uploads
 
 ICONS: # Make sure bot can access these
   icon_warn: ""
