@@ -1,5 +1,5 @@
 LOG_ID: "" #Log stuff to that channel
-VERIFY_ID: "1399006188418633788" #Verification channel
+VERIFY_ID: "" #Verification channel
 VERIFY_CHNL_MESSAGE: "By reacting with ✅ you agree that you have read and understand the rules.\nBreaking these rules will result in punishments or even permament bans."
 
 tokens:
