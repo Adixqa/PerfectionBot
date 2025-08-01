@@ -9,7 +9,7 @@ tokens:
 behaviour:
   COMMAND_PREFIX: "!" #Here what you set will trigger the bot to check for command (for example !clear)
   filter:
-    DETECTION_THRESHOLD: 75 #The higher, the less will filter detect/flag. Reccomended between 70 to 85
+    DETECTION_THRESHOLD: 85 #The higher, the less will filter detect/flag. Reccomended between 80 to 90
   flags:
     CAN_FLAG_ADMINS: false #If on admins can get flagged and punished
     FILTER_AFFECTS_ADMINS: false #If on filter will also prevent admins from sending blacklisted words as well as punish them
