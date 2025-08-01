@@ -44,23 +44,17 @@ def check_bad(message: str, threshold: int = None, max_edits: int = 1) -> dict |
     nm = normalize(message)
     words = nm.split()
 
-    print(f"Normalized words: {words}")
-    print(f"Blacklist words: {list(blacklist_normalized.keys())}")
-
     for w in words:
         for nb, data in blacklist_normalized.items():
             if nb == w:
-                print(f"Exact word match: {nb}")
                 return {"word": nb, **data}
             score = fuzz.ratio(w, nb)
             if score >= threshold:
                 edit_dist = distance.Levenshtein.distance(w, nb)
                 if edit_dist <= max_edits:
-                    print(f"Fuzzy word match: {nb} with score {score} and edit distance {edit_dist}")
                     return {"word": nb, "score": score, "edit_distance": edit_dist, **data}
 
     joined = ''.join(words)
-    print(f"Joined string: {joined}")
 
     max_len = max(len(nb) for nb in blacklist_normalized)
 
@@ -71,14 +65,11 @@ def check_bad(message: str, threshold: int = None, max_edits: int = 1) -> dict |
                 if len(nb) != length:
                     continue
                 if substr == nb:
-                    print(f"Exact substring match in joined: {nb}")
                     return {"word": nb, **data}
                 score = fuzz.ratio(substr, nb)
                 if score >= threshold:
                     edit_dist = distance.Levenshtein.distance(substr, nb)
                     if edit_dist <= max_edits:
-                        print(f"Fuzzy substring match in joined: {nb} with score {score} and edit distance {edit_dist}")
                         return {"word": nb, "score": score, "edit_distance": edit_dist, **data}
 
-    print("No bad words detected.")
     return None
