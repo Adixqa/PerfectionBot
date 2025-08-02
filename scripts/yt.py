@@ -99,7 +99,7 @@ async def monitor_channel(bot):
 
                     last_video_id = vid
                 else:
-                    print("No new video.")
+                    pass
         except Exception as e:
             print("YouTube monitor error:", e)
 
