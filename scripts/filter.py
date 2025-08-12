@@ -1,10 +1,9 @@
-#filter
-
 import json
 import re
 import unicodedata
 from rapidfuzz import fuzz, distance
 from pathlib import Path
+from wordfreq import zipf_frequency
 from PerfectionBot.config.yamlHandler import get_value
 
 CONFIG_PATH = Path(__file__).parents[1] / "config" / "banned-keywords.json"
@@ -25,6 +24,7 @@ def leet_replace(text: str) -> str:
         '$': 's',
         '+': 't',
         '8': 'b',
+        '!': 'i'
     }
     return ''.join(subs.get(c, c) for c in text.lower())
 
@@ -33,6 +33,9 @@ def normalize(text: str) -> str:
     text = unicodedata.normalize("NFKC", text)
     text = re.sub(r'[^a-z0-9]+', ' ', text.lower())
     return text.strip()
+
+def is_valid_word(word: str) -> bool:
+    return zipf_frequency(word, "en") > 1.0
 
 blacklist = load_blacklist()
 blacklist_normalized = {normalize(k): v for k, v in blacklist.items()}
@@ -48,6 +51,10 @@ def check_bad(message: str, threshold: int = None, max_edits: int = 1) -> dict |
         for nb, data in blacklist_normalized.items():
             if nb == w:
                 return {"word": nb, **data}
+            
+            if is_valid_word(w):
+                continue
+
             score = fuzz.ratio(w, nb)
             if score >= threshold:
                 edit_dist = distance.Levenshtein.distance(w, nb)
@@ -55,7 +62,6 @@ def check_bad(message: str, threshold: int = None, max_edits: int = 1) -> dict |
                     return {"word": nb, "score": score, "edit_distance": edit_dist, **data}
 
     joined = ''.join(words)
-
     max_len = max(len(nb) for nb in blacklist_normalized)
 
     for length in range(1, max_len + 1):
@@ -66,6 +72,10 @@ def check_bad(message: str, threshold: int = None, max_edits: int = 1) -> dict |
                     continue
                 if substr == nb:
                     return {"word": nb, **data}
+                
+                if is_valid_word(substr):
+                    continue
+
                 score = fuzz.ratio(substr, nb)
                 if score >= threshold:
                     edit_dist = distance.Levenshtein.distance(substr, nb)
