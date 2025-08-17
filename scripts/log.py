@@ -22,7 +22,7 @@ async def log_to_channel(
 ):
     try:
         log_channel_id = get_value("LOG_ID")
-        channel = guild.get_channel(int(log_channel_id))
+        channel = guild.get_channel(log_channel_id)
         if not channel or not isinstance(channel, discord.TextChannel):
             return
 

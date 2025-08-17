@@ -1,5 +1,6 @@
-#main
+# main.py
 
+import asyncio
 import discord
 from discord.ext import commands, tasks
 import json
@@ -7,10 +8,11 @@ from datetime import datetime, timedelta, timezone
 from asyncio import create_task, sleep
 from concurrent.futures import ThreadPoolExecutor
 import time
+import signal
 
 from PerfectionBot.config.yamlHandler import get_value
 from PerfectionBot.scripts.filter import check_bad
-from PerfectionBot.scripts import yt, verify
+from PerfectionBot.scripts import watchdog, yt, verify
 from PerfectionBot.scripts.lockdown import initiate_lockdown, handle_confirm, handle_revoke
 from PerfectionBot.scripts.log import log_to_channel
 
@@ -355,7 +357,7 @@ async def clear(ctx: commands.Context, amount: int):
 
 @bot.command(name="ping")
 async def ping(ctx: commands.Context):
-    await ctx.reply("Ping!")
+    await ctx.reply("Pong! 🏓")
 
 @bot.command(name="resetver")
 @commands.has_permissions(administrator=True)
@@ -363,5 +365,48 @@ async def resetver(ctx: commands.Context):
     result = await verify.ResetVerification(ctx.guild, verify_msg_ids)
     await ctx.send(result)
 
+async def main():  
+    try:
+        await bot.add_cog(watchdog.WatchdogCog(bot))
+    except Exception as e:
+        print("Failed to add WatchdogCog:", e)
+
+    try:
+        raw = get_value("LOG_ID")
+        alert_id = int(raw) if raw is not None else None
+    except Exception:
+        alert_id = None
+
+    try:
+        interval = int(get_value("watchdog", "check_interval"))
+    except Exception:
+        interval = None
+
+    asyncio.create_task(watchdog.start_monitoring(bot, alert_channel_id=alert_id, interval=interval))
+
+    token = get_value("tokens", "bot")
+    if not token:
+        print("ERROR: bot token missing from config (get_value returned falsy).")
+        return
+
+    await bot.start(token)
+
+async def shutdown():
+    print("Shutting down...")
+    await bot.close()
+    asyncio.get_event_loop().stop()
+
+def signal_handler(sig, frame):
+    asyncio.create_task(shutdown())
+    signal.signal(signal.SIGINT, signal_handler)
+
+@bot.command()
+async def stop(ctx):
+    await ctx.send("Bot is shutting down...")
+    await shutdown()
+
 if __name__ == "__main__":
-    bot.run(get_value("tokens", "bot"))
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("Interrupted, shutting down.")

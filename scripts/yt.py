@@ -1,5 +1,3 @@
-# yt.py
-
 import asyncio
 import re
 import discord
@@ -31,82 +29,125 @@ async def run_blocking(func, *args, **kwargs):
     return await loop.run_in_executor(None, partial(func, *args, **kwargs))
 
 async def monitor_channel(bot):
-    await asyncio.sleep(CHECK_INTERVAL)  # Give some breathing room at startup
+    await asyncio.sleep(CHECK_INTERVAL)
 
-    # Resolve channel ID
     if "/channel/" in CHANNEL_URL:
         channel_id = CHANNEL_URL.split("/channel/")[1].split("/")[0]
     else:
         username = CHANNEL_URL.split("/@")[1].split("/")[0]
-        res = await run_blocking(youtube.search().list(q=f"@{username}", type="channel", part="snippet", maxResults=1).execute)
-        channel_id = res['items'][0]['snippet']['channelId']
+        try:
+            res = await run_blocking(
+                youtube.search().list(
+                    q=f"@{username}",
+                    type="channel",
+                    part="snippet",
+                    maxResults=1
+                ).execute
+            )
+            channel_id = res.get('items', [{}])[0].get('snippet', {}).get('channelId')
+            if not channel_id:
+                print("Could not resolve channel ID for", username)
+                return
+        except Exception as e:
+            print("YouTube monitor error while resolving channel:", e)
+            return
 
     last_video_id = None
 
     while True:
         try:
-            up = await run_blocking(youtube.channels().list(part='contentDetails', id=channel_id).execute)
-            uploads_pid = up['items'][0]['contentDetails']['relatedPlaylists']['uploads']
+            up = await run_blocking(
+                youtube.channels().list(part='contentDetails', id=channel_id).execute
+            )
+            uploads = up.get('items', [])
+            if not uploads:
+                print("No channel items found.")
+                await asyncio.sleep(CHECK_INTERVAL)
+                continue
 
-            pl = await run_blocking(youtube.playlistItems().list(
-                part='snippet,contentDetails',
-                playlistId=uploads_pid,
-                maxResults=1
-            ).execute)
+            content_details = uploads[0].get('contentDetails', {})
+            related = content_details.get('relatedPlaylists', {})
+            uploads_pid = related.get('uploads')
+            if not uploads_pid:
+                print("No uploads playlist found.")
+                await asyncio.sleep(CHECK_INTERVAL)
+                continue
 
-            if not pl['items']:
-                print("No videos found.")
-            else:
-                vid = pl['items'][0]['contentDetails']['videoId']
-                if vid != last_video_id:
-                    v = await run_blocking(youtube.videos().list(
+            pl = await run_blocking(
+                youtube.playlistItems().list(
+                    part='snippet,contentDetails',
+                    playlistId=uploads_pid,
+                    maxResults=1
+                ).execute
+            )
+
+            items = pl.get('items', [])
+            if not items:
+                print("No videos found in uploads playlist.")
+                await asyncio.sleep(CHECK_INTERVAL)
+                continue
+
+            vid = items[0].get('contentDetails', {}).get('videoId')
+            if not vid:
+                print("No videoId found in playlist item.")
+                await asyncio.sleep(CHECK_INTERVAL)
+                continue
+
+            if vid != last_video_id:
+                v = await run_blocking(
+                    youtube.videos().list(
                         part='snippet,liveStreamingDetails,status,contentDetails',
                         id=vid
-                    ).execute)
+                    ).execute
+                )
+                v_items = v.get('items', [])
+                if not v_items:
+                    print("No video details found for", vid)
+                    await asyncio.sleep(CHECK_INTERVAL)
+                    continue
 
-                    v = v['items'][0]
-                    ann = _summarize(v)
-                    if ann:
-                        ch = bot.get_channel(ANNOUNCEMENT_CHANNEL_ID)
-                        if ch:
-                            new_link = f"https://www.youtube.com/watch?v={vid}"
+                v = v_items[0]
+                ann = _summarize(v)
+                if ann:
+                    ch = bot.get_channel(ANNOUNCEMENT_CHANNEL_ID)
+                    if ch:
+                        new_link = f"https://www.youtube.com/watch?v={vid}"
 
-                            try:
-                                pinned = await ch.pins()
-                                if not any(new_link in msg.content for msg in pinned):
-                                    sent = await ch.send(ann)
+                        try:
+                            pinned = await ch.pins()
+                            if not any(new_link in msg.content for msg in pinned):
+                                sent = await ch.send(ann)
 
-                                    for msg in pinned:
-                                        try:
-                                            await msg.unpin()
-                                        except Exception as e:
-                                            print("Failed to unpin:", e)
-
+                                for msg in pinned:
                                     try:
-                                        await sent.pin()
-                                        async for msg in ch.history(limit=5):
-                                            if msg.type == discord.MessageType.pins_add and msg.author == bot.user:
-                                                await msg.delete()
-                                                break
+                                        await msg.unpin()
                                     except Exception as e:
-                                        print("Failed pin cleanup:", e)
-                                else:
-                                    print("Already announced.")
-                            except Exception as e:
-                                print("Pinned message handling failed:", e)
-                        else:
-                            print(f"Channel {ANNOUNCEMENT_CHANNEL_ID} not found.")
+                                        print("Failed to unpin:", e)
 
-                    last_video_id = vid
-                else:
-                    pass
+                                try:
+                                    await sent.pin()
+                                    async for msg in ch.history(limit=5):
+                                        if msg.type == discord.MessageType.pins_add and msg.author == bot.user:
+                                            await msg.delete()
+                                            break
+                                except Exception as e:
+                                    print("Failed pin cleanup:", e)
+                            else:
+                                print("Already announced.")
+                        except Exception as e:
+                            print("Pinned message handling failed:", e)
+                    else:
+                        print(f"Channel {ANNOUNCEMENT_CHANNEL_ID} not found.")
+
+                last_video_id = vid
+
         except Exception as e:
             print("YouTube monitor error:", e)
 
         await asyncio.sleep(CHECK_INTERVAL)
 
 def _summarize(v):
-    s = v['snippet']
+    s = v.get('snippet', {})
     stat = v.get('status', {})
     live = v.get('liveStreamingDetails', {})
     cd = v.get('contentDetails', {})
@@ -116,7 +157,7 @@ def _summarize(v):
         prem = prem.replace('T', ' ').replace('Z', ' UTC') if prem else ''
         return tpl.format(
             PING_everyone='@everyone',
-            target_video_link=f"https://www.youtube.com/watch?v={v['id']}",
+            target_video_link=f"https://www.youtube.com/watch?v={v.get('id')}",
             title=s.get('title', ''),
             description=s.get('description', ''),
             premiere_date=prem
@@ -126,12 +167,15 @@ def _summarize(v):
 
     if bc == 'none':
         m = re.match(r'PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?', cd.get('duration', ''))
-        hrs = int(m.group(1) or 0)
-        mins = int(m.group(2) or 0)
-        secs = int(m.group(3) or 0)
+        hrs = int(m.group(1) or 0) if m else 0
+        mins = int(m.group(2) or 0) if m else 0
+        secs = int(m.group(3) or 0) if m else 0
         tot = hrs * 3600 + mins * 60 + secs
 
-        thumb = next((s.get('thumbnails', {}).get(k) for k in ('maxres', 'standard', 'high', 'medium', 'default') if s.get('thumbnails', {}).get(k)), {})
+        thumb = next(
+            (s.get('thumbnails', {}).get(k) for k in ('maxres', 'standard', 'high', 'medium', 'default')
+             if s.get('thumbnails', {}).get(k)), {}
+        )
         is_vertical = thumb.get('height', 0) > thumb.get('width', 0)
 
         if tot <= 180 and is_vertical:

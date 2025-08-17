@@ -20,8 +20,8 @@ async def initiate_lockdown(
     word: str,
     evt: str
 ):
-    lockdown_role = guild.get_role(int(get_value("roles", "lockdown_ID")))
-    mod_role = guild.get_role(int(get_value("roles", "mod_ID")))
+    lockdown_role = guild.get_role(get_value("roles", "lockdown_ID"))
+    mod_role = guild.get_role(get_value("roles", "mod_ID"))
 
     await member.add_roles(lockdown_role, reason="Pre-punishment lockdown")
 
