@@ -51,7 +51,7 @@ async def GetVerifyMsg(channel: discord.TextChannel) -> discord.Message | None :
 
 async def add_role(guild: discord.Guild, user: discord.Member) :
     try:
-        verified_id = int(get_value("roles", "verified_ID"))
+        verified_id = get_value("roles", "verified_ID")
         verified = discord.utils.get(guild.roles, id=verified_id)
         if verified:
             await user.add_roles(verified)
@@ -62,7 +62,7 @@ async def add_role(guild: discord.Guild, user: discord.Member) :
 
 async def ResetVerification(guild: discord.Guild, verify_msg_ids: dict[int, int]) -> str :
     try:
-        verified_id = int(get_value("roles", "verified_ID"))
+        verified_id = get_value("roles", "verified_ID")
     except (TypeError, ValueError):
         return "❌ Invalid or missing verification role ID in config."
 
@@ -86,7 +86,7 @@ async def ResetVerification(guild: discord.Guild, verify_msg_ids: dict[int, int]
     if not verify_channel_id:
         return "❌ No verify channel ID is set."
 
-    ch = guild.get_channel(int(verify_channel_id))
+    ch = guild.get_channel(verify_channel_id)
     if not ch:
         return "❌ Could not find verification channel."
 

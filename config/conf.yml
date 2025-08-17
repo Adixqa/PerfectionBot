@@ -1,5 +1,5 @@
-LOG_ID: "" #Log stuff to that channel
-VERIFY_ID: "" #Verification channel
+LOG_ID: 0 #Log stuff to that channel
+VERIFY_ID: 0 #Verification channel
 VERIFY_CHNL_MESSAGE: "By reacting with ✅ you agree that you have read and understand the rules.\nBreaking these rules will result in punishments or even permament bans."
 
 tokens:
@@ -18,9 +18,10 @@ behaviour:
     FLAG_LIMIT: 10 #When user reaches that number of flags they will get instantly banned
 
 roles:
-  verified_ID: "" #ID for verified role
-  lockdown_ID: "" #ID for lockdown role
-  mod_ID: "" #ID for mod role
+  verified_ID: 0 #ID for verified role
+  lockdown_ID: 0 #ID for lockdown role
+  mod_ID: 0 #ID for mod role
+  bot_manager_ID: 0 #Can do certain commands
 
 youtube:
   target: "https://www.youtube.com/channel/CHANNEL_ID_HERE" #Link to yt channel
@@ -38,6 +39,10 @@ youtube:
     IGNORE_STREAMS: false
     CHECK_INTERVAL: 30 #Check for new uploads every CHECK_INTERVAL s
     ANNOUNCEMENT_CHANNEL_ID: "" #Channel where bot will announce uploads
+
+watchdog:
+  restart_delay: 0 #Unused for now
+  check_interval: 30 #How often to check system's status
 
 ICONS: # Make sure bot can access these
   icon_warn: ""
