@@ -99,27 +99,27 @@ async def collect_status(bot: discord.Client) -> dict:
     warn_conditions = []
 
     if ram_percent is not None:
-        if ram_percent >= 90:
+        if ram_percent >= 97:
             error_conditions.append(f"ram {ram_percent:.0f}%")
-        elif ram_percent >= 75:
+        elif ram_percent >= 85:
             warn_conditions.append(f"ram {ram_percent:.0f}%")
 
     if cpu_percent is not None:
-        if cpu_percent >= 95:
+        if cpu_percent >= 99:
             error_conditions.append(f"cpu {cpu_percent:.0f}%")
-        elif cpu_percent >= 80:
+        elif cpu_percent >= 90:
             warn_conditions.append(f"cpu {cpu_percent:.0f}%")
 
     if disk_percent is not None:
-        if disk_percent >= 95:
+        if disk_percent >= 99:
             error_conditions.append(f"disk {disk_percent:.0f}%")
-        elif disk_percent >= 85:
+        elif disk_percent >= 90:
             warn_conditions.append(f"disk {disk_percent:.0f}%")
 
     if ws_latency is not None:
-        if ws_latency >= 3.0:
+        if ws_latency >= 10:
             error_conditions.append(f"ws {ws_latency:.2f}s")
-        elif ws_latency >= 1.5:
+        elif ws_latency >= 3.0:
             warn_conditions.append(f"ws {ws_latency:.2f}s")
 
     if error_conditions:
