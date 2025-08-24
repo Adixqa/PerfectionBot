@@ -23,6 +23,16 @@ roles:
   mod_ID: 0 #ID for mod role
   bot_manager_ID: 0 #Can do certain commands
 
+LEVELING:
+  BASE_XP: 20
+  SCALE_FACTOR: 2
+  CHANNEL_ID: 
+  EMBED:
+    title: "Level up!"
+    description: " has reached a new level!"
+    field: "Progress"
+
+
 youtube:
   target: "https://www.youtube.com/channel/CHANNEL_ID_HERE" #Link to yt channel
   announcements:

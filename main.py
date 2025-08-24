@@ -15,6 +15,7 @@ from PerfectionBot.scripts.filter import check_bad
 from PerfectionBot.scripts import watchdog, yt, verify
 from PerfectionBot.scripts.lockdown import initiate_lockdown, handle_confirm, handle_revoke
 from PerfectionBot.scripts.log import log_to_channel
+from PerfectionBot.scripts import leveling
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -161,20 +162,51 @@ async def on_message(message: discord.Message):
             return
 
         hit = await bot.loop.run_in_executor(executor, check_bad, message.content)
+
         if not hit:
+            await bot.loop.run_in_executor(executor, leveling.write_xp, user_id, 2)
+
+            xp = await bot.loop.run_in_executor(executor, leveling.read_xp, user_id)
+
+            prev_xp = max(0, xp - 2)
+
+            prev_lvl = await bot.loop.run_in_executor(executor, leveling.convertToLevel, prev_xp)
+            lvl = await bot.loop.run_in_executor(executor, leveling.convertToLevel, xp)
+
+            chnl_id = get_value("LEVELING", "CHANNEL_ID")
+            chnl = bot.get_channel(int(chnl_id)) if chnl_id else None
+            if not chnl:
+                return
+
+            if lvl > prev_lvl:
+                new_embed = discord.Embed(
+                    title=get_value("LEVELING", "EMBED", "title"),
+                    description=f"<@{user_id}> " + get_value("LEVELING", "EMBED", "description"),
+                    color=discord.Color.gold()
+                )
+                new_embed.add_field(
+                    name=get_value("LEVELING", "EMBED", "field"),
+                    value=f"**{prev_lvl}** -> **{lvl}**",
+                    inline=False
+                )
+                await chnl.send(embed=new_embed)
             return
 
         try:
             await message.delete()
-        except: pass
+        except:
+            pass
 
         word, evt, thresh = hit["word"], hit["event"], hit["count"]
-        user_mem = flag_memory.setdefault(guild_id, {}).setdefault(user_id, {"flags_total": 0, "words": {}})
+        user_mem = flag_memory.setdefault(guild_id, {}).setdefault(
+            user_id, {"flags_total": 0, "words": {}}
+        )
         word_counts = user_mem["words"]
         word_counts[word] = word_counts.get(word, 0) + 1
         user_mem["flags_total"] += 1
 
         _queue_flag_save(guild_id)
+
         create_task(log_to_channel(
             message.guild,
             f"[WARN] {message.author.mention} for `{word}`\n\nContext: `{message.content}`",
@@ -186,7 +218,12 @@ async def on_message(message: discord.Message):
             tmpl = get_value("behaviour", "flags", "WARN_DM")
             await message.author.send(tmpl.format(word=word))
         except Exception as e:
-            create_task(log_to_channel(message.guild, f"❌ Warn DM failed: {e}", discord.Color.red(), "fail"))
+            create_task(log_to_channel(
+                message.guild,
+                f"❌ Warn DM failed: {e}",
+                discord.Color.red(),
+                "fail"
+            ))
 
         if word_counts[word] >= thresh:
             if evt == "mute":
@@ -201,7 +238,12 @@ async def on_message(message: discord.Message):
                         "mute"
                     ))
                 except Exception as e:
-                    create_task(log_to_channel(message.guild, f"❌ Mute failed: {e}", discord.Color.red(), "fail"))
+                    create_task(log_to_channel(
+                        message.guild,
+                        f"❌ Mute failed: {e}",
+                        discord.Color.red(),
+                        "fail"
+                    ))
             else:
                 create_task(initiate_lockdown(message.guild, message.author, word, evt))
 
@@ -227,7 +269,12 @@ async def on_message(message: discord.Message):
                 if chan:
                     await chan.delete(reason="User auto-banned")
             except Exception as e:
-                create_task(log_to_channel(message.guild, f"❌ Auto-ban failed: {e}", discord.Color.red(), "fail"))
+                create_task(log_to_channel(
+                    message.guild,
+                    f"❌ Auto-ban failed: {e}",
+                    discord.Color.red(),
+                    "fail"
+                ))
 
         _queue_flag_save(guild_id)
 
