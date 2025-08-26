@@ -22,7 +22,8 @@ IGNORE_STREAMS           = to_bool(get_value("youtube", "flags", "IGNORE_STREAMS
 ANNOUNCEMENTS            = get_value("youtube", "announcements")
 ANNOUNCEMENT_CHANNEL_ID  = int(get_value("youtube", "flags", "ANNOUNCEMENT_CHANNEL_ID"))
 
-youtube = build('youtube', 'v3', developerKey=API_KEY)
+def build_client():
+    return build('youtube', 'v3', developerKey=API_KEY)
 
 async def run_blocking(func, *args, **kwargs):
     loop = asyncio.get_running_loop()
@@ -36,8 +37,9 @@ async def monitor_channel(bot):
     else:
         username = CHANNEL_URL.split("/@")[1].split("/")[0]
         try:
+            youtube_tmp = build_client()
             res = await run_blocking(
-                youtube.search().list(
+                youtube_tmp.search().list(
                     q=f"@{username}",
                     type="channel",
                     part="snippet",
@@ -53,6 +55,7 @@ async def monitor_channel(bot):
             return
 
     last_video_id = None
+    youtube = build_client()
 
     while True:
         try:
@@ -143,6 +146,7 @@ async def monitor_channel(bot):
 
         except Exception as e:
             print("YouTube monitor error:", e)
+            youtube = build_client()
 
         await asyncio.sleep(CHECK_INTERVAL)
 
