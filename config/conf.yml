@@ -14,8 +14,9 @@ behaviour:
     CAN_FLAG_ADMINS: false #If on admins can get flagged and punished
     FILTER_AFFECTS_ADMINS: false #If on filter will also prevent admins from sending blacklisted words as well as punish them
     MUTE_TIME: 900 #Mute after filter detection in s
-    WARN_DM: "You have been warned for saying: `{word}`.\nIf you think you have been mistakenly flagged please contact administration."
+    WARN_DM: "You have been warned for saying: `{word}`.\nIf you think you have been mistakenly please react to this message with ⚠️ within 24 hours."
     FLAG_LIMIT: 10 #When user reaches that number of flags they will get instantly banned
+    review_channel:  #Channel where review requests get sent
 
 roles:
   verified_ID: 0 #ID for verified role

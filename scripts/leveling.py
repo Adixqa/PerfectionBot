@@ -1,3 +1,5 @@
+#leveling
+
 from pathlib import Path
 import os
 
@@ -11,6 +13,8 @@ MAX_LEVEL = 1000
 
 XP_INCREMENTS = [20, 35, 40]
 XP_EXTRA_STEP = 20
+
+ROLE_CONF = Path(__file__).parents[1] / "config" / "lvl.config"
 
 def ensure_file():
     FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -84,3 +88,58 @@ def convertToLevel(xp: int) -> int:
             break
 
     return min(level, MAX_LEVEL)
+
+def read_level_roles():
+    if not ROLE_CONF.exists():
+        return []
+
+    roles = []
+    with open(ROLE_CONF, "r") as f:
+        for line in f:
+            line = line.strip()
+            if not line or ":" not in line:
+                continue
+            try:
+                lvl_str, role_str = line.split(":", 1)
+                lvl = int(lvl_str.strip())
+                role_id = int(role_str.strip())
+                roles.append((lvl, role_id))
+            except ValueError:
+                continue
+
+    return sorted(roles, key=lambda x: x[0])
+
+async def check_level_reward(member, new_level: int):
+    roles = read_level_roles()
+    if not roles:
+        return None
+
+    reward_role_id = None
+    for lvl, role_id in roles:
+        if new_level >= lvl:
+            reward_role_id = role_id
+        else:
+            break
+
+    if not reward_role_id:
+        return None
+
+    reward_role_ids = [role_id for _, role_id in roles]
+    to_remove = [r for r in member.roles if r.id in reward_role_ids and r.id != reward_role_id]
+
+    try:
+        if to_remove:
+            await member.remove_roles(*to_remove, reason=f"Leveling system cleanup (level {new_level})")
+    except Exception as e:
+        print(f"[Leveling] Failed to remove old roles from {member}: {e}")
+
+    role = member.guild.get_role(reward_role_id)
+    if role and role not in member.roles:
+        try:
+            await member.add_roles(role, reason=f"Reached level {new_level}")
+            return role
+        except Exception as e:
+            print(f"[Leveling] Failed to give role {reward_role_id} to {member}: {e}")
+            return None
+
+    return None
