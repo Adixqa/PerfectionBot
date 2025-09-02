@@ -1,30 +1,33 @@
-import json
+#filter
+
 import re
 import unicodedata
-from rapidfuzz import fuzz, distance
 from pathlib import Path
+from itertools import combinations
+from rapidfuzz import fuzz, distance
 from wordfreq import zipf_frequency
+import spacy
 from PerfectionBot.config.yamlHandler import get_value
 
-CONFIG_PATH = Path(__file__).parents[1] / "config" / "banned-keywords.json"
+CONFIG_PATH = Path(__file__).parents[1] / "config" / "banned-keywords.config"
+SAFE_SUBSTRINGS = ["pass", "classic", "assignment", "class", "glass", "nagger", "dagger", "cam", "come", "where", "ore", "hoe", "grape", "whose", "who"]
 
-def load_blacklist() -> dict:
+nlp = spacy.load("en_core_web_sm")
+
+def load_blacklist() -> list[str]:
+    words = []
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            words.append(line)
+    return words
 
 def leet_replace(text: str) -> str:
     subs = {
-        '1': 'i',
-        '0': 'o',
-        '3': 'e',
-        '4': 'a',
-        '5': 's',
-        '7': 't',
-        '@': 'a',
-        '$': 's',
-        '+': 't',
-        '8': 'b',
-        '!': 'i'
+        '1': 'i', '0': 'o', '3': 'e', '4': 'a', '5': 's',
+        '7': 't', '@': 'a', '$': 's', '+': 't', '8': 'b', '!': 'i'
     }
     return ''.join(subs.get(c, c) for c in text.lower())
 
@@ -35,51 +38,63 @@ def normalize(text: str) -> str:
     return text.strip()
 
 def is_valid_word(word: str) -> bool:
-    return zipf_frequency(word, "en") > 1.0
+    freq = zipf_frequency(word, "en")
+    if freq > 0.0:
+        return True
+    common_suffixes = ["s", "es", "ed", "ing", "er", "ly"]
+    for suffix in common_suffixes:
+        if word.endswith(suffix) and len(word) > len(suffix) + 2:
+            base = word[:-len(suffix)]
+            base_freq = zipf_frequency(base, "en")
+            if base_freq > 0.0:
+                return True
+            if suffix in ["ed", "ing"] and len(base) > 2 and base[-1] == base[-2]:
+                base2 = base[:-1]
+                base2_freq = zipf_frequency(base2, "en")
+                if base2_freq > 0.0:
+                    return True
+    return False
 
 blacklist = load_blacklist()
-blacklist_normalized = {normalize(k): v for k, v in blacklist.items()}
+blacklist_normalized = [normalize(w) for w in blacklist]
 
 def check_bad(message: str, threshold: int = None, max_edits: int = 1) -> dict | None:
     if threshold is None:
         threshold = get_value("behaviour", "filter", "DETECTION_THRESHOLD")
 
     nm = normalize(message)
-    words = nm.split()
+    doc = nlp(nm)
+    tokens = [t.lemma_ for t in doc if not t.is_stop]
+    flagged_words = []
 
-    for w in words:
-        for nb, data in blacklist_normalized.items():
-            if nb == w:
-                return {"word": nb, **data}
-            
-            if is_valid_word(w):
-                continue
-
+    for w in tokens:
+        if w in blacklist_normalized:
+            flagged_words.append(w)
+            continue
+        if is_valid_word(w) or len(w) <= 3:
+            continue
+        for nb in blacklist_normalized:
             score = fuzz.ratio(w, nb)
-            if score >= threshold:
-                edit_dist = distance.Levenshtein.distance(w, nb)
-                if edit_dist <= max_edits:
-                    return {"word": nb, "score": score, "edit_distance": edit_dist, **data}
+            if score >= threshold and distance.Levenshtein.distance(w, nb) <= max_edits:
+                flagged_words.append(nb)
 
-    joined = ''.join(words)
-    max_len = max(len(nb) for nb in blacklist_normalized)
-
-    for length in range(1, max_len + 1):
-        for i in range(len(joined) - length + 1):
-            substr = joined[i:i+length]
-            for nb, data in blacklist_normalized.items():
-                if len(nb) != length:
+    for r in range(2, 4):
+        for combo in combinations(tokens, r):
+            combined = ''.join(combo)
+            if any(safe in combined for safe in SAFE_SUBSTRINGS):
+                continue
+            for nb in blacklist_normalized:
+                if len(nb) != len(combined):
                     continue
-                if substr == nb:
-                    return {"word": nb, **data}
-                
-                if is_valid_word(substr):
+                if combined == nb:
+                    flagged_words.append(nb)
                     continue
+                if is_valid_word(combined) or len(combined) <= 3:
+                    continue
+                score = fuzz.ratio(combined, nb)
+                if score >= threshold and distance.Levenshtein.distance(combined, nb) <= max_edits:
+                    flagged_words.append(nb)
 
-                score = fuzz.ratio(substr, nb)
-                if score >= threshold:
-                    edit_dist = distance.Levenshtein.distance(substr, nb)
-                    if edit_dist <= max_edits:
-                        return {"word": nb, "score": score, "edit_distance": edit_dist, **data}
-
+    if flagged_words:
+        return {"word": flagged_words[0]}
     return None

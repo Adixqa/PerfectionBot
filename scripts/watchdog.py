@@ -225,13 +225,27 @@ async def start_monitoring(bot: discord.Client, alert_channel_id: Optional[int] 
     except Exception:
         interval = 30
 
+    cooldown = 180
+    last_alert_time = None
+
     await bot.wait_until_ready()
     chan = bot.get_channel(alert_channel_id) if alert_channel_id else None
 
     while not bot.is_closed():
         try:
             status = await collect_status(bot)
+
+            now = datetime.now().timestamp()
+            send_alert = False
+
             if status["state"] != "OK":
+                if last_alert_time is None or now - last_alert_time >= cooldown:
+                    send_alert = True
+                    last_alert_time = now
+            else:
+                last_alert_time = None
+
+            if send_alert:
                 emb = _make_status_embed(status)
                 if chan:
                     try:
@@ -254,6 +268,7 @@ async def start_monitoring(bot: discord.Client, alert_channel_id: Optional[int] 
                             print(f"Watchdog detected {status['state']}: {status['error_conditions'] or status['warn_conditions']}")
                     else:
                         print(f"Watchdog detected {status['state']}: {status['error_conditions'] or status['warn_conditions']}")
+
         except Exception as e:
             if chan and chan.guild:
                 try:
