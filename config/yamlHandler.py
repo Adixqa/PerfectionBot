@@ -3,7 +3,7 @@ import yaml
 
 config_path = os.path.join(os.path.dirname(__file__), "conf.yml")
 
-with open(config_path, "r") as file:
+with open(config_path, "r", encoding="utf-8-sig") as file:
     _config = yaml.safe_load(file)
 
 def _normalize(value):
@@ -12,25 +12,21 @@ def _normalize(value):
 
     if isinstance(value, str):
         val_lower = value.strip().lower()
-
         if val_lower == "true":
             return True
         if val_lower == "false":
             return False
 
         try:
-            int_val = int(value)
-            return int_val
+            return int(value)
         except ValueError:
             pass
         try:
-            float_val = float(value)
-            return float_val
+            return float(value)
         except ValueError:
             pass
 
     return value
-
 
 def get_value(*keys):
     value = _config

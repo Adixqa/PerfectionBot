@@ -1,3 +1,4 @@
+GUILD_ID: 0 #ID of your server
 LOG_ID: 0 #Log stuff to that channel
 VERIFY_ID: 0 #Verification channel
 VERIFY_CHNL_MESSAGE: "By reacting with ✅ you agree that you have read and understand the rules.\nBreaking these rules will result in punishments or even permament bans."
@@ -6,6 +7,11 @@ tokens:
   bot: "YOUR_BOT_TOKEN_HERE" #Token used to run bot, do NOT share it. If leaked anyone can take control of the bot and cause irreversible damage
   yt: "YOUR_YT_TOKEN_HERE" #Token used to check for yt uploads, also do NOT share.
 
+systems:
+  filter: true #filtering system
+  leveling: true #leveling system
+  yt: true #youtube monitoring
+  
 behaviour:
   COMMAND_PREFIX: "!" #Here what you set will trigger the bot to check for command (for example !clear)
   filter:
@@ -14,7 +20,7 @@ behaviour:
     CAN_FLAG_ADMINS: false #If on admins can get flagged and punished
     FILTER_AFFECTS_ADMINS: false #If on filter will also prevent admins from sending blacklisted words as well as punish them
     MUTE_TIME: 900 #Mute after filter detection in s
-    WARN_DM: "You have been warned for saying: `{word}`.\nIf you think you have been mistakenly please react to this message with ⚠️ within 24 hours."
+    WARN_DM: "You have been warned for saying: `{word}`.\nIf you think you have been mistakenly flagged please react to this message with ⚠️ within 24 hours."
     FLAG_LIMIT: 10 #When user reaches that number of flags they will get instantly banned
     review_channel:  #Channel where review requests get sent
 
@@ -27,7 +33,7 @@ roles:
 LEVELING:
   BASE_XP: 20
   SCALE_FACTOR: 2
-  CHANNEL_ID: 
+  CHANNEL_ID: 0 #where to send level up messages
   EMBED:
     title: "Level up!"
     description: " has reached a new level!"
@@ -43,11 +49,13 @@ youtube:
     premiere: "{PING_everyone} ... is premiering [now]({target_video_link})!\n**# {title}**\n\n`{description}`"
     upcoming_stream: "{PING_everyone} ... has set a [stream]({target_video_link})!\n**# {title}**\non **{premiere_date}**\n\n`{description}`"
     stream: "{PING_everyone} ... is currently [streaming]({target_video_link})!\n**# {title}**\n`{description}`"
+    new_post: "{PING_everyone} ... has made a new [post]({target_video_link})!\n**# {title}**\n{image}"
 
   flags:
     IGNORE_SHORTS: false
     IGNORE_VIDEOS: false
     IGNORE_STREAMS: false
+    IGNORE_POSTS: true #posts checking does not work in this version
     CHECK_INTERVAL: 30 #Check for new uploads every CHECK_INTERVAL s
     ANNOUNCEMENT_CHANNEL_ID: "" #Channel where bot will announce uploads
 

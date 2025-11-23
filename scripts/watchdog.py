@@ -2,7 +2,6 @@
 
 import asyncio
 import os
-import sys
 import platform
 import shutil
 import subprocess
@@ -10,6 +9,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 import discord
+from discord import app_commands
 from discord.ext import commands
 
 from PerfectionBot.config.yamlHandler import get_value
@@ -35,7 +35,7 @@ def _format_bytes(n: Optional[int]) -> str:
 async def collect_status(bot: discord.Client) -> dict:
     ram_used = ram_total = ram_available = ram_percent = None
     cpu_percent = None
-    disk_used = disk_total = disk_percent = None
+    disk_used = disk_total = disk_percent = disk_free = None
 
     if psutil:
         try:
@@ -59,9 +59,10 @@ async def collect_status(bot: discord.Client) -> dict:
             du = psutil.disk_usage("/")
             disk_total = du.total
             disk_used = du.used
+            disk_free = getattr(du, "free", disk_total - disk_used if (disk_total is not None and disk_used is not None) else None)
             disk_percent = du.percent
         except Exception:
-            disk_total = disk_used = disk_percent = None
+            disk_total = disk_used = disk_percent = disk_free = None
     else:
         try:
             with open("/proc/meminfo", "r") as f:
@@ -80,9 +81,10 @@ async def collect_status(bot: discord.Client) -> dict:
             usage = shutil.disk_usage("/")
             disk_total = usage.total
             disk_used = usage.used
+            disk_free = usage.free
             disk_percent = (disk_used / disk_total) * 100 if disk_total else None
         except Exception:
-            disk_total = disk_used = disk_percent = None
+            disk_total = disk_used = disk_percent = disk_free = None
 
         cpu_percent = None
 
@@ -94,6 +96,11 @@ async def collect_status(bot: discord.Client) -> dict:
 
     os_info = platform.platform()
     python_version = platform.python_version()
+
+    try:
+        version = "1.1.8"
+    except Exception:
+        version = "unknown"
 
     error_conditions = []
     warn_conditions = []
@@ -110,11 +117,14 @@ async def collect_status(bot: discord.Client) -> dict:
         elif cpu_percent >= 90:
             warn_conditions.append(f"cpu {cpu_percent:.0f}%")
 
-    if disk_percent is not None:
-        if disk_percent >= 99:
-            error_conditions.append(f"disk {disk_percent:.0f}%")
-        elif disk_percent >= 90:
-            warn_conditions.append(f"disk {disk_percent:.0f}%")
+    if disk_free is not None:
+        try:
+            if disk_free < 100 * 1024 * 1024:  # 100 MB
+                error_conditions.append(f"disk { _format_bytes(disk_free) } left")
+            elif disk_free < 1 * 1024 * 1024 * 1024:  # 1 GB
+                warn_conditions.append(f"disk { _format_bytes(disk_free) } left")
+        except Exception:
+            pass
 
     if ws_latency is not None:
         if ws_latency >= 10:
@@ -137,10 +147,12 @@ async def collect_status(bot: discord.Client) -> dict:
         "cpu_percent": cpu_percent,
         "disk_used": disk_used,
         "disk_total": disk_total,
+        "disk_free": disk_free,
         "disk_percent": disk_percent,
         "ws_latency": ws_latency,
         "os": os_info,
         "python_version": python_version,
+        "version": version,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "state": state,
         "error_conditions": error_conditions,
@@ -159,7 +171,9 @@ def _make_status_embed(status: dict) -> discord.Embed:
     if status.get("ram_total") is not None:
         emb.add_field(
             name="RAM",
-            value=f"Used: {_format_bytes(status.get('ram_used'))} / {_format_bytes(status.get('ram_total'))}\nAvailable: {_format_bytes(status.get('ram_available'))}\n{status.get('ram_percent'):.1f}% used" if status.get("ram_percent") is not None else "Unavailable",
+            value=f"Used: {_format_bytes(status.get('ram_used'))} / {_format_bytes(status.get('ram_total'))}\n"
+                  f"Available: {_format_bytes(status.get('ram_available'))}\n"
+                  f"{status.get('ram_percent'):.1f}% used" if status.get("ram_percent") is not None else "Unavailable",
             inline=False
         )
     else:
@@ -169,9 +183,12 @@ def _make_status_embed(status: dict) -> discord.Embed:
     emb.add_field(name="CPU", value=cpu_val, inline=True)
 
     if status.get("disk_total") is not None:
+        disk_free = status.get("disk_free")
         emb.add_field(
             name="Disk",
-            value=f"Used: {_format_bytes(status.get('disk_used'))} / {_format_bytes(status.get('disk_total'))}\n{status.get('disk_percent'):.1f}% used" if status.get("disk_percent") is not None else "Unavailable",
+            value=f"Used: {_format_bytes(status.get('disk_used'))} / {_format_bytes(status.get('disk_total'))}\n"
+                  f"Free: {_format_bytes(disk_free)}\n"
+                  f"{status.get('disk_percent'):.1f}% used" if status.get("disk_percent") is not None else "Unavailable",
             inline=True
         )
     else:
@@ -184,6 +201,7 @@ def _make_status_embed(status: dict) -> discord.Embed:
 
     emb.add_field(name="OS", value=status.get("os", "Unknown"), inline=False)
     emb.add_field(name="Python", value=status.get("python_version", "Unknown"), inline=True)
+    emb.add_field(name="Version", value=str(status.get("version", "unknown")), inline=True)
 
     if status.get("error_conditions"):
         emb.add_field(name="Errors", value=", ".join(status["error_conditions"]), inline=False)
@@ -286,42 +304,69 @@ async def start_monitoring(bot: discord.Client, alert_channel_id: Optional[int] 
         await asyncio.sleep(interval)
 
 
+watchdog_group = app_commands.Group(name="watchdog", description="Watchdog commands")
+
+
+async def _user_is_manager(bot: commands.Bot, member: discord.Member) -> bool:
+    try:
+        if await bot.is_owner(member):
+            return True
+    except Exception:
+        pass
+
+    try:
+        raw = get_value("roles", "bot_manager_ID")
+        if raw is None:
+            return False
+        manager_id = int(raw)
+    except Exception:
+        return False
+
+    return any(r.id == manager_id for r in member.roles)
+
+
+@watchdog_group.command(name="status", description="Show status of the bot")
+async def watchdog_status(interaction: discord.Interaction):
+    await interaction.response.defer(thinking=True)
+    status = await collect_status(interaction.client)
+    emb = _make_status_embed(status)
+    await interaction.followup.send(embed=emb)
+
+
+@watchdog_group.command(name="reboot", description="Reboots the bot. Useful to remotely restart bot in case of error state")
+async def watchdog_reboot(interaction: discord.Interaction):
+    bot = interaction.client
+    if not isinstance(interaction.user, discord.Member):
+        await interaction.response.send_message("❌ This command must be used in a guild by a member.", ephemeral=True)
+        return
+
+    allowed = await _user_is_manager(bot, interaction.user)
+    if not allowed:
+        await interaction.response.send_message("❌ You don't have permission to use this command.", ephemeral=True)
+        return
+
+    await interaction.response.send_message("🔄 Rebooting bot...", ephemeral=True)
+    cur_dir = os.path.dirname(os.path.abspath(__file__))
+    up_dir = os.path.abspath(os.path.join(cur_dir, ".."))
+    root_dir = os.path.abspath(os.path.join(up_dir, ".."))
+    try:
+        subprocess.run(["python3", "-m", "PerfectionBot.scripts.reboot"], cwd=root_dir)
+    except Exception as e:
+        try:
+            if bot.guilds:
+                asyncio.create_task(log_to_channel(bot.guilds[0], f"❌ Reboot failed: {e}", discord.Color.red(), "fail"))
+        except Exception:
+            print("Reboot failed:", e)
+
+
 class WatchdogCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
     async def _user_is_manager(self, member: discord.Member) -> bool:
-        try:
-            if await self.bot.is_owner(member):
-                return True
-        except Exception:
-            pass
+        return await _user_is_manager(self.bot, member)
 
-        try:
-            raw = get_value("roles", "bot_manager_ID")
-            if raw is None:
-                return False
-            manager_id = int(raw)
-        except Exception:
-            return False
-
-        return any(r.id == manager_id for r in member.roles)
-
-    @commands.command(name="status")
-    async def status(self, ctx: commands.Context):
-        status = await collect_status(self.bot)
-        emb = _make_status_embed(status)
-        await ctx.send(embed=emb)
-
-    @commands.command(name="reboot")
-    @commands.has_role(get_value("roles", "bot_manager_ID"))
-    async def reboot(self, ctx):
-        cur_dir = os.path.dirname(os.path.abspath(__file__))
-        up_dir = os.path.abspath(os.path.join(cur_dir, ".."))
-        root_dir = os.path.abspath(os.path.join(up_dir, ".."))
-        #print(root_dir)
-
-        subprocess.run(["python3", "-m", "PerfectionBot.scripts.reboot"], cwd=root_dir)
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(WatchdogCog(bot))
+    bot.tree.add_command(watchdog_group)
