@@ -1,11 +1,18 @@
-#leveling
+# PerfectionBot/scripts/leveling.py
 
 from pathlib import Path
 import os
-
 from PerfectionBot.config.yamlHandler import get_value
 
-FILE = Path(__file__).parents[1] / "data" / "xp.dat"
+BASE_DIR = Path(__file__).resolve().parents[1]
+DATA_DIR = BASE_DIR / "data"
+CONFIG_DIR = BASE_DIR / "config"
+
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+
+FILE = DATA_DIR / "xp.dat"
+ROLE_CONF = CONFIG_DIR / "lvl.config"
 
 BASE_XP = int(get_value("LEVELING", "BASE_XP"))
 SCALE_FACTOR = float(get_value("LEVELING", "SCALE_FACTOR"))
@@ -14,22 +21,18 @@ MAX_LEVEL = 1000
 XP_INCREMENTS = [20, 35, 40]
 XP_EXTRA_STEP = 20
 
-ROLE_CONF = Path(__file__).parents[1] / "config" / "lvl.config"
-
 def ensure_file():
     FILE.parent.mkdir(parents=True, exist_ok=True)
     FILE.touch(exist_ok=True)
 
 def read_xp(id: int) -> int:
     ensure_file()
-    with open(FILE, "r") as f:
+    with FILE.open("r", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
-            if not line:
+            if not line or ":" not in line:
                 continue
             parts = line.split(":")
-            if len(parts) != 2:
-                continue
             if parts[0] == str(id):
                 try:
                     return int(parts[1])
@@ -41,15 +44,13 @@ def write_xp(id: int, value: int):
     ensure_file()
     lines = []
     found = False
-    with open(FILE, "r") as f:
+
+    with FILE.open("r", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
-            if not line:
+            if not line or ":" not in line:
                 continue
             parts = line.split(":")
-            if len(parts) != 2:
-                lines.append(line)
-                continue
             if parts[0] == str(id):
                 try:
                     current = int(parts[1])
@@ -60,9 +61,11 @@ def write_xp(id: int, value: int):
                 found = True
             else:
                 lines.append(line)
+
     if not found:
         lines.append(f"{id}:{value}")
-    with open(FILE, "w") as f:
+
+    with FILE.open("w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
 
 def convertToLevel(xp: int) -> int:
@@ -94,7 +97,7 @@ def read_level_roles():
         return []
 
     roles = []
-    with open(ROLE_CONF, "r") as f:
+    with ROLE_CONF.open("r", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             if not line or ":" not in line:
